@@ -1,9 +1,12 @@
-package top.meethigher.proxy.http;
+package top.meethigher;
 
+import io.vertx.core.AsyncResult;
+import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.dns.AddressResolverOptions;
 import io.vertx.core.http.HttpClient;
+import io.vertx.core.http.HttpClientRequest;
 import io.vertx.core.http.HttpClientResponse;
 import okhttp3.OkHttpClient;
 import okhttp3.Response;
@@ -19,7 +22,7 @@ import java.util.concurrent.locks.LockSupport;
  */
 public class VertxAndOkhttpResolveDomainTest {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         new VertxAndOkhttpResolveDomainTest().testVertxHttp();
     }
 
@@ -48,35 +51,43 @@ public class VertxAndOkhttpResolveDomainTest {
 
         VertxOptions vertxOptions = new VertxOptions()
                 .setAddressResolverOptions(new AddressResolverOptions()
-                        .setQueryTimeout(500));
+                        .setQueryTimeout(50000));
         Vertx vertx = Vertx.vertx(vertxOptions);
 
         HttpClient httpClient = vertx.createHttpClient(TestUtils.httpClientOptions());
         long start = System.currentTimeMillis();
         httpClient.request(TestUtils.requestOptions())
-                .onComplete(ar -> {
-                    if (ar.succeeded()) {
-                        ar.result().send().onComplete(ar1 -> {
-                            if (ar1.succeeded()) {
-                                HttpClientResponse resp = ar1.result();
-                                resp.pause();
-                                resp.bodyHandler(buffer -> {
-                                    System.out.println(buffer);
-                                    System.out.println("耗时：" + (System.currentTimeMillis() - start) + " ms");
-                                    System.exit(0);
-                                });
-                                resp.resume();
-                            } else {
-                                ar1.cause().printStackTrace();
-                            }
-                        });
-                    } else {
-                        ar.cause().printStackTrace();
-                    }
-                });
+                .onComplete(connectHandler(start));
 
 
         LockSupport.park();
 
+    }
+
+    public Handler<AsyncResult<HttpClientRequest>> connectHandler(long start) {
+        return ar -> {
+            if (ar.succeeded()) {
+                ar.result().send().onComplete(sendHandler(start));
+            } else {
+                ar.cause().printStackTrace();
+            }
+        };
+    }
+
+    public Handler<AsyncResult<HttpClientResponse>> sendHandler(long start) {
+        return ar1 -> {
+            if (ar1.succeeded()) {
+                HttpClientResponse resp = ar1.result();
+                resp.pause();
+                resp.bodyHandler(buffer -> {
+                    System.out.println(buffer);
+                    System.out.println("耗时：" + (System.currentTimeMillis() - start) + " ms");
+                    System.exit(0);
+                });
+                resp.resume();
+            } else {
+                ar1.cause().printStackTrace();
+            }
+        };
     }
 }
