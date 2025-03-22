@@ -1,19 +1,13 @@
-复现步骤
+使用main方法运行以下方法
 
-1. 运行单元测试`top.meethigher.ProxyServerTest#start`
-2. 运行单元测试`top.meethigher.ProxyServerTest#cancelReq`
+1. 运行`top.meethigher.proxy.http.VertxAndOkhttpResolveDomainTest.testOkhttp`
+2. 运行`top.meethigher.proxy.http.VertxAndOkhttpResolveDomainTest.testVertxHttp`
 
-会报错
+会发现vertx httpclient明显更慢。
 
-```sh
-2025-03-06 18:09:38.495 [vert.x-eventloop-thread-0] INFO backend server started on port 888
-2025-03-06 18:09:38.510 [vert.x-eventloop-thread-0] INFO proxy server started on port 8080
-2025-03-06 18:09:46.819 [vert.x-eventloop-thread-0] INFO backend server response: /bug-test
-2025-03-06 18:09:46.827 [vert.x-eventloop-thread-0] ERROR http://127.0.0.1:888/bug-test pipeto error
-io.netty.channel.StacklessClosedChannelException
-2025-03-06 18:09:46.827 [vert.x-eventloop-thread-0] ERROR Unhandled exception
-java.lang.IllegalStateException: Response has already been written
-```
+此处我需要借助async-profiler分析httpclient慢在哪里
+
+
 
 
 
