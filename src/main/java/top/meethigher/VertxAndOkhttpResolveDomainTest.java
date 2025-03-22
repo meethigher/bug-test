@@ -5,15 +5,16 @@ import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.dns.AddressResolverOptions;
+import io.vertx.core.dns.DnsClientOptions;
 import io.vertx.core.http.HttpClient;
 import io.vertx.core.http.HttpClientRequest;
 import io.vertx.core.http.HttpClientResponse;
 import okhttp3.OkHttpClient;
 import okhttp3.Response;
-import top.meethigher.proxy.utils.TestUtils;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -36,6 +37,19 @@ public class VertxAndOkhttpResolveDomainTest {
     }
 
 
+    public void testVertxDns() throws Exception {
+        Vertx vertx = Vertx.vertx();
+        vertx.createDnsClient(new DnsClientOptions().setQueryTimeout(1000)).lookup("reqres.in", ar->{
+            if(ar.succeeded()) {
+                System.exit(0);
+            }else {
+                ar.cause().printStackTrace();
+            }
+        });
+        LockSupport.park();
+    }
+
+
     public void testOkhttp() throws Exception {
         OkHttpClient client = TestUtils.okHttpClient();
         long start = System.currentTimeMillis();
@@ -47,11 +61,24 @@ public class VertxAndOkhttpResolveDomainTest {
     }
 
 
+    /**
+     * 断点
+     * io.netty.resolver.dns.DnsResolveContext#internalResolve(java.lang.String, io.netty.util.concurrent.Promise)
+     * io.netty.resolver.dns.DnsResolveContext#query(io.netty.resolver.dns.DnsServerAddressStream, int, io.netty.handler.codec.dns.DnsQuestion, io.netty.resolver.dns.DnsQueryLifecycleObserver, boolean, io.netty.util.concurrent.Promise, java.lang.Throwable)
+     *
+     * 问题定位：
+     * 因为我机器本身有一个虚拟网卡，这个网卡有指定一个局域网的DNS服务器，这个就被netty自动获取到了。我传的是个互联网的域名，他通过这个解析就会等待超时，直到下一个dns服务器解析成功。
+     *
+     * 解决方式，任选其一
+     * 1. 提前预热dns解析结果缓存
+     * 2. 超时参数设置的短一点
+     */
     public void testVertxHttp() {
 
         VertxOptions vertxOptions = new VertxOptions()
                 .setAddressResolverOptions(new AddressResolverOptions()
-                        .setQueryTimeout(50000));
+                        .setQueryTimeout(50000)
+                        .setServers(new ArrayList<>()));
         Vertx vertx = Vertx.vertx(vertxOptions);
 
         HttpClient httpClient = vertx.createHttpClient(TestUtils.httpClientOptions());

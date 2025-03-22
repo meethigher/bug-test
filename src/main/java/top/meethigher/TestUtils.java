@@ -1,5 +1,6 @@
-package top.meethigher.proxy.utils;
+package top.meethigher;
 
+import io.netty.bootstrap.Bootstrap;
 import io.vertx.core.http.HttpClientOptions;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpVersion;
@@ -92,6 +93,17 @@ public class TestUtils {
 
         }
         return builder.build();
+    }
+
+
+    public static boolean modifyBootstrap(Bootstrap bootstrap) {
+        bootstrap.disableResolver();
+        System.out.println("执行啦");
+        return false;
+    }
+
+    public static boolean modifyBootstrap() {
+       return true;
     }
 
 }
