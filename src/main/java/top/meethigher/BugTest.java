@@ -3,6 +3,9 @@ package top.meethigher;
 import io.vertx.core.Vertx;
 import io.vertx.core.file.AsyncFile;
 import io.vertx.core.file.OpenOptions;
+import io.vertx.core.http.HttpConnection;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetServer;
 import io.vertx.core.net.NetSocket;
@@ -19,15 +22,15 @@ public class BugTest {
          * 整体流程模拟
          * 1. 启动一个HTTP后端服务，短连接，返回一个2MB的图片
          * 2. 启动TcpProxyServer，代理这个HTTP后端服务。
-         * 3. 启动Jmeter，大批量调用TcpProxyServer。由于后端连接是短连接，返回数据后接着关闭targetSocket。此时由于数据还存储在pipeTo，尚未发送，而sourceSocket已经通过targetSocket.closeHandler关闭，进而导致io.netty.channel.StacklessClosedChannelException
+         * 3. 启动Jmeter，大批量调用（测试时使用500并发）TcpProxyServer。由于后端连接是短连接，返回数据后接着关闭targetSocket。此时由于数据还存储在pipeTo，尚未发送，而sourceSocket已经通过targetSocket.closeHandler关闭，进而导致io.netty.channel.StacklessClosedChannelException
          *
          *
          * 解决办法：
          * closeHandler只记录日志，不操作连接的关闭。因为pipeTo自动会处理正常数据包、异常数据包。
          *
          */
-        new BackendServer(8080);
-        new TcpProxyServer(808, "192.168.1.107", 8080);
+        new BackendHttpServer(8080);
+        new TcpProxyServer(808, "192.168.1.105", 8080);
         LockSupport.park();
 
     }
@@ -94,6 +97,55 @@ public class BugTest {
         }
     }
 
+    public static class BackendHttpServer {
+        private static final Logger log = LoggerFactory.getLogger(BackendHttpServer.class);
+        private final int port;
+        private final Vertx vertx;
+
+        public BackendHttpServer(int port) {
+            this.port = port;
+            this.vertx = Vertx.vertx();
+            HttpServer httpServer = vertx.createHttpServer();
+            httpServer.requestHandler(req -> {
+                final String path = "D:/Pictures/images/4.jpg";
+                HttpServerResponse response = req.response();
+                HttpConnection connection = req.connection();
+                response.putHeader("Content-Type", "image/png").setChunked(true);
+
+                vertx.fileSystem().open(path, new OpenOptions().setRead(true), result -> {
+                    if (result.succeeded()) {
+                        AsyncFile file = result.result();
+                        file.pause();
+                        // 把文件内容通过 pipeTo 写入 socket
+                        file.pipeTo(response, ar -> {
+                            if (ar.succeeded()) {
+
+                            } else {
+                                ar.cause().printStackTrace();
+                            }
+                            connection.close();
+                        });
+                    } else {
+                        String err = "打开文件失败: " + result.cause().getMessage();
+                        log.error(err, result.cause());
+                        response.setStatusCode(500).end(err).onComplete(ar -> {
+                            connection.close();
+                        });
+                    }
+                });
+
+
+            }).listen(this.port).onComplete(ar -> {
+                if (ar.succeeded()) {
+                    log.info("BackendHttpServer started on port {}", port);
+                } else {
+                    log.error("BackendHttpServer failed to start on port {}", port, ar.cause());
+                    System.exit(1);
+                }
+            });
+        }
+    }
+
 
     /**
      * 模拟一个短连接服务
@@ -120,7 +172,7 @@ public class BugTest {
         private void connectHandle(NetSocket socket) {
             socket.pause();
             // 模拟传输大数据的短连接
-            vertx.fileSystem().open("D:/Downloads/debian-12.10.0-arm64-DVD-1.iso", new OpenOptions().setRead(true), result -> {
+            vertx.fileSystem().open("D:/Downloads/pandoc-3.6.1-windows-x86_64.zip", new OpenOptions().setRead(true), result -> {
                 if (result.succeeded()) {
                     AsyncFile file = result.result();
 
@@ -131,7 +183,6 @@ public class BugTest {
                         } else {
                             socket.close();
                         }
-                        System.out.println("传输完毕");
                     });
                 } else {
                     String err = "打开文件失败: " + result.cause().getMessage();
