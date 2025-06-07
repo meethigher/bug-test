@@ -30,6 +30,7 @@ public class BugTest {
          *
          */
         new BackendHttpServer(8080);
+        // 为了更好的复现问题，最好经过中间的路由器中转一道。就比如我连了wifi，那就直接使用处于同一wifi局域网内的机器做压测，避免使用本机虚拟机那样直接压。
         new TcpProxyServer(808, "192.168.1.105", 8080);
         LockSupport.park();
 
@@ -80,10 +81,12 @@ public class BugTest {
 
                     sourceSocket.closeHandler(v -> {
                         log.debug("sourceSocket {} <-- {} closed", sourceLocal, sourceRemote);
+                        // 需要注意对于vertx中的netsocket来说，end()和close()是等价的
                         targetSocket.close();
                     });
                     targetSocket.closeHandler(v -> {
                         log.debug("targetSocket {} --> {} closed", targetLocal, targetRemote);
+                        // 需要注意对于vertx中的netsocket来说，end()和close()是等价的
                         sourceSocket.close();
                     });
 
