@@ -45,6 +45,31 @@ public class BugTest {
          *
          * 为啥？
          * 继续跟源码
+         *
+         * 关键在于io.vertx.core.streams.impl.PipeImpl内部做了太多东西。
+         * a.pipeTo(b)
+         *
+         * 相当于
+         * a.resume();
+         * a.handler(buf -> {
+         *     b.write(buf);
+         *     if (b.writeQueueFull()) {
+         *         a.pause();
+         *         b.drainHandler(t -> a.resume());
+         *     }
+         * });
+         * a.endHandler(v -> {
+         *     a.handler(null);
+         *     a.endHandler(null);
+         *     a.exceptionHandler(null);
+         *     b.end().onComplete(completion);
+         * });
+         * a.exceptionHandler(e -> {
+         *     a.handler(null);
+         *     a.endHandler(null);
+         *     a.exceptionHandler(null);
+         *     b.end().onComplete(v -> completion.handle(Future.failedFuture(e)));
+         * });
          */
 
 
@@ -72,30 +97,8 @@ public class BugTest {
                         diyPipeTo(b, a);
 
 
-                        //a.endHandler(v -> {
-                        //    log.info("{}--{} ended", a.remoteAddress(), a.localAddress());
-                        //});
-                        //b.endHandler(v -> {
-                        //    log.info("{}--{} ended", b.remoteAddress(), b.localAddress());
-                        //});
-                        //a.handler(buf -> {
-                        //    b.write(buf);
-                        //    if (b.writeQueueFull()) {
-                        //        a.pause();
-                        //        b.drainHandler(t -> {
-                        //            a.resume();
-                        //        });
-                        //    }
-                        //});
-                        //b.handler(buf -> {
-                        //    a.write(buf);
-                        //    if (a.writeQueueFull()) {
-                        //        b.pause();
-                        //        a.drainHandler(t -> {
-                        //            b.resume();
-                        //        });
-                        //    }
-                        //});
+                        //a.handler(b::write);
+                        //b.handler(a::write);
 
 
                         a.resume();
