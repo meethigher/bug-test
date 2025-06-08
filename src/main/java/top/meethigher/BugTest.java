@@ -1,5 +1,6 @@
 package top.meethigher;
 
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetClient;
@@ -26,8 +27,6 @@ public class BugTest {
 
     /**
      * 测试TCP空闲超时断开
-     *
-     *
      */
     public static void step2() {
         /**
@@ -36,16 +35,19 @@ public class BugTest {
          * 2. 开启proxyServer
          * 3. 手机通过wifi局域网连接到服务器的proxyServer
          * 4. 等待idleTimeout后，查看整条链路连接状态
-         * 5. user--[user conn]--proxyServer--[backend conn]--backendServer，即便backend conn主动超时断开，user conn也会监听到数据包自动关闭。
-         * （为什么会出现上述现象？将user、proxyServer、backendServer分别分给三台局域网的不同机器，TCP抓包分析。）
+         * 5. user--[a]--proxyServer proxyClient--[b]--backendServer，即便proxyClient主动超时断开，user也会监听到数据包关闭。其中proxyClient为proxyServer内置的请求client
+         *
+         *
+         * 为什么会出现上述现象？将user、proxyServer、backendServer分别分给三台局域网的不同机器，TCP抓包分析。
+         * 发现
+         * 当使用pipeTo进行a与b的双向数据绑定时，proxyClient主动断开，user也会监听到断开。
+         * 当使用write进行a与b的双向数据绑定时，proxyClient主动断开，user不会监听到。
+         *
+         * 为啥？
+         * 继续跟源码
          */
 
 
-        // 后端
-        NetServer backendServer = vertx.createNetServer();
-        backendServer.connectHandler(socket -> socket.write(String.valueOf(System.currentTimeMillis())))
-                .listen(8888)
-                .onFailure(e -> System.exit(1));
         // 代理
         NetServer proxyServer = vertx.createNetServer();
         NetClient proxyClient = vertx.createNetClient(new NetClientOptions().setIdleTimeoutUnit(TimeUnit.SECONDS)
@@ -63,8 +65,39 @@ public class BugTest {
                         closeHandler(b);
                         b.remoteAddress();
                         b.localAddress();
-                        pipeTo(a, b);
-                        pipeTo(b, a);
+                        // pipeTo(a, b);
+                        // pipeTo(b, a);
+
+                        diyPipeTo(a, b);
+                        diyPipeTo(b, a);
+
+
+                        //a.endHandler(v -> {
+                        //    log.info("{}--{} ended", a.remoteAddress(), a.localAddress());
+                        //});
+                        //b.endHandler(v -> {
+                        //    log.info("{}--{} ended", b.remoteAddress(), b.localAddress());
+                        //});
+                        //a.handler(buf -> {
+                        //    b.write(buf);
+                        //    if (b.writeQueueFull()) {
+                        //        a.pause();
+                        //        b.drainHandler(t -> {
+                        //            a.resume();
+                        //        });
+                        //    }
+                        //});
+                        //b.handler(buf -> {
+                        //    a.write(buf);
+                        //    if (a.writeQueueFull()) {
+                        //        b.pause();
+                        //        a.drainHandler(t -> {
+                        //            b.resume();
+                        //        });
+                        //    }
+                        //});
+
+
                         a.resume();
                         b.resume();
                     });
@@ -85,8 +118,6 @@ public class BugTest {
          */
 
         NetServer netServer = vertx.createNetServer();
-
-
         /**
          *
          * 客户端网络物理断开，Windows与Linux对于连接的处理机制不同。
@@ -140,7 +171,15 @@ public class BugTest {
     }
 
     public static void pipeTo(NetSocket o, NetSocket t) {
-        o.pipeTo(t).onComplete(ar -> log.info("{} --{} pipe to {} -- {} result: {}", o.remoteAddress(), o.localAddress(),
+        o.pipeTo(t).onComplete(ar -> log.info("{} -- {} pipe to {} -- {} result: {}", o.remoteAddress(), o.localAddress(),
+                t.localAddress(), t.remoteAddress(),
+                ar.succeeded()));
+    }
+
+    public static void diyPipeTo(NetSocket o, NetSocket t) {
+        Promise<Void> promise = Promise.promise();
+        new DiyPipe<>(o).to(t, promise);
+        promise.future().onComplete(ar -> log.info("{} -- {} pipe to {} -- {} result: {}", o.remoteAddress(), o.localAddress(),
                 t.localAddress(), t.remoteAddress(),
                 ar.succeeded()));
     }
