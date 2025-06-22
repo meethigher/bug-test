@@ -40,7 +40,7 @@ public class H2cRequest {
         HttpClient httpClient = vertx.createHttpClient(httpClientOptions);
         RequestOptions requestOptions = new RequestOptions()
                 // 方便wireshark抓包，需要H2cServer放到局域网另外一台机器上面
-                .setAbsoluteURI("http://192.168.1.223:6060/test");
+                .setAbsoluteURI("http://192.168.1.223:80/test");
         httpClient.request(requestOptions).onSuccess(req -> {
             req.send().onSuccess(resp -> {
                 resp.bodyHandler(buf -> {
@@ -69,7 +69,7 @@ public class H2cRequest {
                 }})
                 .build();
         Request request = new Request.Builder()
-                .url("http://192.168.1.223:6060/test")
+                .url("http://192.168.1.223:80/test")
                 .build();
 
         try (Response resp = client.newCall(request).execute()) {
