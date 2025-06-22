@@ -47,7 +47,13 @@ public class H2cRequest {
                     log.info("{} received:\n{}", resp.version(), buf);
                     latch.countDown();
                 });
+            }).onFailure(e -> {
+                e.printStackTrace();
+                System.exit(1);
             });
+        }).onFailure(e -> {
+            e.printStackTrace();
+            System.exit(1);
         });
 
         try {
@@ -77,8 +83,6 @@ public class H2cRequest {
             latch.countDown();
         } catch (Exception e) {
             e.printStackTrace();
-
-
             try {
                 latch.await();
             } catch (Exception ignore) {

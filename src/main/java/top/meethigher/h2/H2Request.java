@@ -38,10 +38,16 @@ public class H2Request {
                             log.info("{} received:\n{}", resp.version(), buf.toString());
                             latch.countDown();
                         });
+                    }).onFailure(e -> {
+                        e.printStackTrace();
+                        System.exit(1);
                     });
+                }).onFailure(e -> {
+                    e.printStackTrace();
+                    System.exit(1);
                 });
         try {
-            latch.countDown();
+            latch.await();
         } catch (Exception ignore) {
         }
     }
@@ -61,12 +67,21 @@ public class H2Request {
                 .setAbsoluteURI("https://meethigher.com/test");
         httpClient.request(requestOptions)
                 .onSuccess(req -> {
-                    req.send().onSuccess(resp -> {
-                        resp.bodyHandler(buf -> {
-                            log.info("{} received:\n{}", resp.version(), buf.toString());
-                            latch.countDown();
-                        });
-                    });
+                    req.send()
+                            .onSuccess(resp -> {
+                                resp.bodyHandler(buf -> {
+                                    log.info("{} received:\n{}", resp.version(), buf.toString());
+                                    latch.countDown();
+                                });
+                            })
+                            .onFailure(e -> {
+                                e.printStackTrace();
+                                System.exit(1);
+                            });
+                })
+                .onFailure(e -> {
+                    e.printStackTrace();
+                    System.exit(1);
                 });
         try {
             latch.countDown();
