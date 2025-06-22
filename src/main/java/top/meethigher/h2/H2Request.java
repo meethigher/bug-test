@@ -14,6 +14,9 @@ import java.util.concurrent.CountDownLatch;
 public class H2Request {
     private static final Logger log = LoggerFactory.getLogger(H2Request.class);
 
+    /**
+     * "D:\3Develop\Java\jdk-21.0.1\bin\keytool" -importcert -keystore "D:\3Develop\Java\jdk-21.0.1\lib\security\cacerts" -storepass changeit -file "D:/Desktop/bug-test/ssl/public.pem" -alias meethigher_com
+     */
     public static void main(String[] args) {
         alpn();
     }
