@@ -19,7 +19,7 @@ public class H2cServer {
                 .setHttp2ClearTextEnabled(true);
         HttpServer httpServer = vertx.createHttpServer(httpServerOptions);
         httpServer.requestHandler(req -> {
-            req.response().end("h2c server " + System.currentTimeMillis());
+            req.response().end("h2c server " + System.currentTimeMillis() + "\n");
         }).listen(80).onFailure(e -> {
             e.printStackTrace();
             System.exit(1);

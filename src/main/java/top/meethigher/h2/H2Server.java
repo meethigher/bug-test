@@ -40,7 +40,7 @@ public class H2Server {
 
         HttpServer httpServer = vertx.createHttpServer(httpServerOptions);
         httpServer.requestHandler(req -> {
-            req.response().end(System.currentTimeMillis() + "\n");
+            req.response().end("h2 server " + System.currentTimeMillis() + "\n");
         }).listen(443).onFailure(e -> {
             e.printStackTrace();
             System.exit(1);
