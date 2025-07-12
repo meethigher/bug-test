@@ -3,6 +3,8 @@ this is a demo repo
 
 分支说明
 
+close-wait-server: 各种特殊情况复现close-wait
+
 vertx-http-proxy: 复现客户端主动断开时的Response has already been written
 
 vertx-http-dns: vertx httpclient dns解析慢
