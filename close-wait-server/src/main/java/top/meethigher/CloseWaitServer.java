@@ -1,10 +1,21 @@
 package top.meethigher;
 
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.*;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollServerSocketChannel;
+import io.netty.handler.codec.http.*;
 import io.undertow.Undertow;
 import io.undertow.server.RoutingHandler;
 import io.undertow.util.Headers;
 import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpClient;
+import io.vertx.core.http.HttpClientOptions;
 import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.RequestOptions;
+import io.vertx.core.net.NetClient;
+import io.vertx.core.net.NetClientOptions;
 import org.apache.catalina.Context;
 import org.apache.catalina.Wrapper;
 import org.apache.catalina.connector.Connector;
@@ -22,6 +33,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
@@ -204,6 +217,82 @@ public class CloseWaitServer {
     }
 
     /**
+     * 使用Netty的NativeEpoll启动HttpServer1.1。
+     */
+    public static void nettyNativeEpoll() throws Exception {
+        // 使用epoll线程组，若不指定线程，则默认根据当前服务器配置分配线程数
+        // boss负责accept(), worker负责处理业务逻辑
+        EpollEventLoopGroup boss = new EpollEventLoopGroup(1);
+        EpollEventLoopGroup worker = new EpollEventLoopGroup();
+
+        ServerBootstrap bootstrap = new ServerBootstrap();
+        bootstrap.group(boss, worker)
+                .channel(EpollServerSocketChannel.class)
+                .childHandler(new ChannelInitializer<Channel>() {
+                    @Override
+                    protected void initChannel(Channel ch) throws Exception {
+                        ch.pipeline()
+                                .addLast(new HttpRequestDecoder())
+                                .addLast(new HttpResponseEncoder())
+                                .addLast(new HttpObjectAggregator(512 * 1024))
+                                .addLast(new SimpleChannelInboundHandler<FullHttpRequest>() {
+                                    @Override
+                                    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) throws Exception {
+                                        if (!"/bug-test".equals(req.uri())) {
+                                            DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.NOT_FOUND);
+                                            resp.headers().set(HttpHeaderNames.CONTENT_LENGTH, resp.content().readableBytes());
+                                            resp.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain;charset=utf-8");
+                                            ChannelFuture channelFuture = HttpUtil.isKeepAlive(req) ?
+                                                    ctx.writeAndFlush(resp) : ctx.writeAndFlush(resp).addListener(ChannelFutureListener.CLOSE);
+                                            return;
+                                        }
+                                        ctx.executor().parent().next().submit(() -> {
+                                            try {
+                                                TimeUnit.SECONDS.sleep(20);
+                                            } catch (Exception e) {
+                                            }
+                                            DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK,
+                                                    Unpooled.copiedBuffer(String.valueOf(System.currentTimeMillis()), StandardCharsets.UTF_8));
+                                            resp.headers().set(HttpHeaderNames.CONTENT_LENGTH, resp.content().readableBytes());
+                                            resp.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain;charset=utf-8");
+                                            ChannelFuture channelFuture = HttpUtil.isKeepAlive(req) ?
+                                                    ctx.writeAndFlush(resp) : ctx.writeAndFlush(resp).addListener(ChannelFutureListener.CLOSE);
+                                        });
+                                    }
+
+                                    @Override
+                                    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                                        cause.printStackTrace();
+                                        ctx.close();
+                                    }
+                                });
+                    }
+                })
+                .option(ChannelOption.SO_BACKLOG, 50)
+                // so_keepalive的作用，只是控制连接空闲时，内核是否发送数据包探测对端存活，若不存活则关闭。
+                /**
+                 * <pre>{@code
+                 * 服务端开启SO_KEEPALIVE，启动服务端
+                 * 客户端开启SO_KEEPALIVE，连接服务端：curl --no-keepalive http://10.0.0.10:6666/bug-test
+                 *
+                 * 查看连接状态
+                 * Every 1.0s: netstat -ano|head -n 2 && netstat -ano|grep 6666                                                                        Sun Jul 13 14:43:20 2025
+                 *
+                 * Active Internet connections (servers and established)
+                 * Proto Recv-Q Send-Q Local Address           Foreign Address         State       Timer
+                 * tcp        0      0 10.0.0.10:52970         10.0.0.10:6666          ESTABLISHED off (0.00/0/0)
+                 * tcp6       0      0 :::6666                 :::*                    LISTEN      off (0.00/0/0)
+                 * tcp6       0      0 10.0.0.10:6666          10.0.0.10:52970         ESTABLISHED keepalive (7215.63/0/0)
+                 * }</pre>
+                 */
+                .childOption(ChannelOption.SO_KEEPALIVE, true);
+
+        bootstrap.bind(port).sync();
+        log.info("netty native epoll http server started on {}", port);
+
+    }
+
+    /**
      * Http1.1 Server
      * <p>
      * client与server建立http连接，server 20秒后响应，client 10秒超时主动断开。
@@ -213,6 +302,69 @@ public class CloseWaitServer {
     public static void webfluxHttpServer() throws Exception {
         // TODO: 2025/7/11 新建一个springboot项目
         System.out.println("Use Spring Boot to create a WebFlux service yourself or directly start the module webflux-http-server.");
+    }
+
+
+    public static void tcpClient(int maxConcurrency, long timeout,
+                                 boolean soKeepalive,
+                                 String host, int port) throws Exception {
+        Vertx vertx = Vertx.vertx();
+        NetClient netClient = vertx.createNetClient(new NetClientOptions().setTcpKeepAlive(soKeepalive));
+        CountDownLatch latch = new CountDownLatch(maxConcurrency);
+        for (int i = 0; i < maxConcurrency; i++) {
+            final int finalI = i;
+            netClient.connect(port, host)
+                    .onSuccess(socket -> {
+                        log.info("{} connected, {}--{}", finalI, socket.remoteAddress(), socket.localAddress());
+                        socket.closeHandler(v -> {
+                            latch.countDown();
+                            log.info("{} closed, {}--{}", finalI, socket.remoteAddress(), socket.localAddress());
+                        });
+                        vertx.setTimer(timeout, id -> {
+                            socket.close();
+                        });
+                    })
+                    .onFailure(e -> {
+                        log.error("{} connect error", finalI, e);
+                        latch.countDown();
+                    });
+        }
+        latch.countDown();
+        vertx.close();
+    }
+
+    public static void httpClient(int maxConcurrency, long timeout,
+                                  boolean soKeepalive,
+                                  String url) throws Exception {
+        Vertx vertx = Vertx.vertx();
+
+        CountDownLatch latch = new CountDownLatch(maxConcurrency);
+
+        HttpClient httpClient = vertx.createHttpClient(new HttpClientOptions().setKeepAlive(false).setTcpKeepAlive(soKeepalive).setMaxPoolSize(maxConcurrency));
+        RequestOptions requestOptions = new RequestOptions()
+                .setAbsoluteURI(url);
+        for (int i = 0; i < maxConcurrency; i++) {
+            int finalI = i;
+            httpClient.request(requestOptions).onSuccess(req -> {
+                log.info("{} connected, {}--{}", finalI, req.connection().remoteAddress(), req.connection().localAddress());
+                req.connection().closeHandler(v -> {
+                    log.info("{} closed. {}--{}", finalI, req.connection().remoteAddress(), req.connection().localAddress());
+                    latch.countDown();
+                });
+                req.send().onSuccess(res -> {
+                    log.info("{} send success", finalI);
+                }).onFailure(e -> {
+                    log.error("{} send error", finalI, e);
+                });
+            }).onFailure(e -> {
+                log.error("{} connect error", finalI, e);
+                latch.countDown();
+            });
+        }
+
+
+        latch.await();
+        vertx.close();
     }
 
 
