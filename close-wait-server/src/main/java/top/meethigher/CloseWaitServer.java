@@ -31,6 +31,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -306,10 +307,11 @@ public class CloseWaitServer {
 
 
     public static void tcpClient(int maxConcurrency, long timeout,
+                                 int connectTimeout,
                                  boolean soKeepalive,
                                  String host, int port) throws Exception {
         Vertx vertx = Vertx.vertx();
-        NetClient netClient = vertx.createNetClient(new NetClientOptions().setTcpKeepAlive(soKeepalive));
+        NetClient netClient = vertx.createNetClient(new NetClientOptions().setTcpKeepAlive(soKeepalive).setConnectTimeout(connectTimeout));
         CountDownLatch latch = new CountDownLatch(maxConcurrency);
         for (int i = 0; i < maxConcurrency; i++) {
             final int finalI = i;
@@ -331,19 +333,45 @@ public class CloseWaitServer {
         }
 
 
-
         latch.await();
         vertx.close();
     }
 
+    public static void pureTcpClient(int maxConcurrency, long timeout,
+                                     int connectTimeout,
+                                     boolean soKeepalive,
+                                     String host, int port) throws Exception {
+        for (int i = 0; i < maxConcurrency; i++) {
+            final int finalI = i;
+            new Thread(() -> {
+                Socket socket = new Socket();
+                try {
+                    socket.setKeepAlive(soKeepalive);
+                    socket.connect(new InetSocketAddress(host, port), connectTimeout);
+                    log.info("{} connected, {}--{}", finalI, socket.getRemoteSocketAddress(), socket.getLocalSocketAddress());
+                    TimeUnit.MILLISECONDS.sleep(timeout);
+                } catch (Exception e) {
+                    log.error("{} connect error", finalI, e);
+                } finally {
+                    try {
+                        socket.close();
+                    } catch (Exception ignore) {
+                    }
+                    log.info("{} closed, {}--{}", finalI, socket.getRemoteSocketAddress(), socket.getLocalSocketAddress());
+                }
+            }).start();
+        }
+    }
+
     public static void httpClient(int maxConcurrency, long timeout,
+                                  int connectTimeout,
                                   boolean soKeepalive,
                                   String url) throws Exception {
         Vertx vertx = Vertx.vertx();
 
         CountDownLatch latch = new CountDownLatch(maxConcurrency);
 
-        HttpClient httpClient = vertx.createHttpClient(new HttpClientOptions().setKeepAlive(false).setTcpKeepAlive(soKeepalive).setMaxPoolSize(maxConcurrency));
+        HttpClient httpClient = vertx.createHttpClient(new HttpClientOptions().setConnectTimeout(connectTimeout).setKeepAlive(false).setTcpKeepAlive(soKeepalive).setMaxPoolSize(maxConcurrency));
         RequestOptions requestOptions = new RequestOptions()
                 .setAbsoluteURI(url);
         for (int i = 0; i < maxConcurrency; i++) {

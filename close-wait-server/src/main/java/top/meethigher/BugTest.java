@@ -13,8 +13,9 @@ public class BugTest {
         System.out.println("  5 - Vertx Http Server");
         System.out.println("  6 - Netty Native Epoll Http Server");
         System.out.println("  7 - Webflux Http Server");
-        System.out.println("  8 - Tcp Client");
-        System.out.println("  9 - Http Client");
+        System.out.println("  8 - Vertx Tcp Client");
+        System.out.println("  9 - Pure Tcp Client");
+        System.out.println("  10 - Vertx Http Client");
         System.out.print("Enter the server you want to start: ");
         int type = scanner.nextInt();
         switch (type) {
@@ -43,6 +44,9 @@ public class BugTest {
                 tcpClient(scanner);
                 break;
             case 9:
+                pureTcpClient(scanner);
+                break;
+            case 10:
                 httpClient(scanner);
                 break;
             default:
@@ -55,13 +59,31 @@ public class BugTest {
         int maxConcurrency = scanner.nextInt();
         System.out.print("Enter timeout(ms): ");
         long timeout = scanner.nextLong();
+        System.out.print("Enter connectTimeout(ms): ");
+        int connectTimeout = scanner.nextInt();
         System.out.print("Enter enable tcp so_keepalive(true/false): ");
         boolean soKeepalive = scanner.nextBoolean();
         System.out.print("Enter host: ");
         String host = scanner.next();
         System.out.print("Enter port: ");
         int port = scanner.nextInt();
-        CloseWaitServer.tcpClient(maxConcurrency, timeout, soKeepalive, host, port);
+        CloseWaitServer.tcpClient(maxConcurrency, timeout, connectTimeout, soKeepalive, host, port);
+    }
+
+    private static void pureTcpClient(Scanner scanner) throws Exception {
+        System.out.print("Enter maxConcurrency: ");
+        int maxConcurrency = scanner.nextInt();
+        System.out.print("Enter timeout(ms): ");
+        long timeout = scanner.nextLong();
+        System.out.print("Enter connectTimeout(ms): ");
+        int connectTimeout = scanner.nextInt();
+        System.out.print("Enter enable tcp so_keepalive(true/false): ");
+        boolean soKeepalive = scanner.nextBoolean();
+        System.out.print("Enter host: ");
+        String host = scanner.next();
+        System.out.print("Enter port: ");
+        int port = scanner.nextInt();
+        CloseWaitServer.pureTcpClient(maxConcurrency, timeout, connectTimeout, soKeepalive, host, port);
     }
 
     private static void httpClient(Scanner scanner) throws Exception {
@@ -69,10 +91,12 @@ public class BugTest {
         int maxConcurrency = scanner.nextInt();
         System.out.print("Enter timeout(ms): ");
         long timeout = scanner.nextLong();
+        System.out.print("Enter connectTimeout(ms): ");
+        int connectTimeout = scanner.nextInt();
         System.out.print("Enter enable tcp so_keepalive(true/false): ");
         boolean soKeepalive = scanner.nextBoolean();
         System.out.print("Enter http url: ");
         String url = scanner.next();
-        CloseWaitServer.httpClient(maxConcurrency, timeout, soKeepalive, url);
+        CloseWaitServer.httpClient(maxConcurrency, timeout, connectTimeout, soKeepalive, url);
     }
 }
