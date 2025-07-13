@@ -1,0 +1,17 @@
+#!/usr/bin/env expect
+
+# yum -y install expect
+
+# 获取命令行参数
+set timeout -1
+set host [lindex $argv 0]
+set port [lindex $argv 1]
+
+# 开始 telnet 连接
+spawn telnet $host $port
+
+# 保持连接：每隔一段时间发送一个空命令或心跳
+while {1} {
+    sleep 30
+    # send "\r"
+}
