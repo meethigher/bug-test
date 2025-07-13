@@ -329,7 +329,10 @@ public class CloseWaitServer {
                         latch.countDown();
                     });
         }
-        latch.countDown();
+
+
+
+        latch.await();
         vertx.close();
     }
 
@@ -350,6 +353,9 @@ public class CloseWaitServer {
                 req.connection().closeHandler(v -> {
                     log.info("{} closed. {}--{}", finalI, req.connection().remoteAddress(), req.connection().localAddress());
                     latch.countDown();
+                });
+                vertx.setTimer(timeout, id -> {
+                    req.connection().close();
                 });
                 req.send().onSuccess(res -> {
                     log.info("{} send success", finalI);

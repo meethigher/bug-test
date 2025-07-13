@@ -43,7 +43,7 @@ public class BugTest {
                 tcpClient(scanner);
                 break;
             case 9:
-                tcpClient(scanner);
+                httpClient(scanner);
                 break;
             default:
                 System.out.println("Unrecognized type");
