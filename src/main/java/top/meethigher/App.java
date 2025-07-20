@@ -1,6 +1,7 @@
 package top.meethigher;
 
 import io.vertx.core.Vertx;
+import io.vertx.core.VertxOptions;
 import io.vertx.core.net.NetClientOptions;
 
 import java.util.Scanner;
@@ -9,7 +10,9 @@ import java.util.concurrent.locks.LockSupport;
 public class App {
     public static void main(String[] args) {
 
-        Vertx vertx = Vertx.vertx();
+
+        // Linux时，若epoll可用，则自动启用epoll
+        Vertx vertx = Vertx.vertx(new VertxOptions().setPreferNativeTransport(true));
 
         Scanner scanner = new Scanner(System.in);
         System.out.println("mode lists: ");
@@ -25,9 +28,17 @@ public class App {
                 int port = scanner.nextInt();
                 System.out.print("host: ");
                 String host = scanner.next();
-                System.out.print("clientHost: ");
+                System.out.print("clientHost(Use commas to separate multiple): ");
                 String clientHost = scanner.next();
-                new C1MTcpClient(vertx.createNetClient(new NetClientOptions().setLocalAddress(clientHost)), maxConcurrency, port, host).start();
+                if (clientHost.contains(",")) {
+                    for (String client : clientHost.split(",")) {
+                        new Thread(() -> {
+                            new C1MTcpClient(vertx.createNetClient(new NetClientOptions().setLocalAddress(client)), maxConcurrency, port, host).start();
+                        }).start();
+                    }
+                } else {
+                    new C1MTcpClient(vertx.createNetClient(new NetClientOptions().setLocalAddress(clientHost)), maxConcurrency, port, host).start();
+                }
                 break;
             case 1:
             default:
