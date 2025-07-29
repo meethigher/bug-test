@@ -63,6 +63,10 @@ public class UpdatedDomainResolverTest {
      * 打个断点io.netty.resolver.dns.DnsResolveContext#query(io.netty.resolver.dns.DnsServerAddressStream, int, io.netty.handler.codec.dns.DnsQuestion, io.netty.resolver.dns.DnsQueryLifecycleObserver, boolean, io.netty.util.concurrent.Promise, java.lang.Throwable)
      * <p>
      * 若进来，则是启用了netty的dns解析，若不是则是走了jdk的解析
+     *
+     * @see <a href="https://vertx.io/docs/vertx-core/java/#_host_name_resolution">Vert.x Core | Eclipse Vert.x</a>
+     * @see <a href="https://github.com/eclipse-vertx/vert.x/issues/3395">Vertx AddressResolverOptions TTL issue · Issue #3395 · eclipse-vertx/vert.x</a>
+     * @see <a href="https://github.com/eclipse-vertx/vert.x/pull/4843">Dns address resolver hosts configuration refresh period. by vietj · Pull Request #4843 · eclipse-vertx/vert.x</a>
      */
     private static void vertx(boolean enableJdkResolver) {
         System.setProperty("vertx.disableDnsResolver", String.valueOf(enableJdkResolver));
@@ -78,7 +82,7 @@ public class UpdatedDomainResolverTest {
         vertx.setPeriodic(2000, id -> {
             httpClient.request(new RequestOptions().setAbsoluteURI(
 //                    "http://meethigher.com:8080/api"
-                    "http://meethigher.top:8080/api"
+                            "http://meethigher.top:8080/api"
 
                     ))
                     .onSuccess(req -> {
